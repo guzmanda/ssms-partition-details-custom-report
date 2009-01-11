@@ -264,7 +264,7 @@
         <ZIndex>3</ZIndex>
         <CanGrow>true</CanGrow>
         <Height>0.36in</Height>
-        <Value>SSMS Node Parameters</Value>
+        <Value>SSMS Node Parameter Values Passed</Value>
       </Textbox>
       <Textbox Name="textbox14">
         <Top>0.375in</Top>
