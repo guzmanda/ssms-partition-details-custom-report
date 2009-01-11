@@ -80,7 +80,8 @@
       </Fields>
       <Query>
         <DataSourceName>PartitioningDemo</DataSourceName>
-        <CommandText>SELECT
+        <CommandText>--partitioned objects (join sys.data_spaces to sys.partition_schemes)
+SELECT
 	OBJECT_NAME(p.object_id) AS ObjectName, 
 	i.name AS IndexName, 
 	p.index_id AS IndexID, 
@@ -105,6 +106,7 @@ WHERE
 	p.object_id = CASE WHEN @ObjectTypeName IN ('Table', 'View') THEN OBJECT_ID(@ObjectName) ELSE p.object_id END --when a table or view is selected, filter on only the selected object
 	AND OBJECTPROPERTY(p.object_id, 'IsMSShipped') = 0
 UNION ALL
+--non-partitioned objects (join sys.data_spaces to sys.filegroups)
 SELECT
 	OBJECT_NAME(p.object_id) AS ObjectName, 
 	i.name AS IndexName,
