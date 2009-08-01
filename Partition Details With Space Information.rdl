@@ -77,11 +77,26 @@
           <DataField>Rows</DataField>
           <rd:TypeName>System.Int64</rd:TypeName>
         </Field>
+        <Field Name="UsedPages">
+          <DataField>UsedPages</DataField>
+          <rd:TypeName>System.Int64</rd:TypeName>
+        </Field>
+        <Field Name="UsedSpaceKB">
+          <DataField>UsedSpaceKB</DataField>
+          <rd:TypeName>System.Int64</rd:TypeName>
+        </Field>
+        <Field Name="ReservedPages">
+          <DataField>ReservedPages</DataField>
+          <rd:TypeName>System.Int64</rd:TypeName>
+        </Field>
+        <Field Name="ReservedSpaceKB">
+          <DataField>ReservedSpaceKB</DataField>
+          <rd:TypeName>System.Int64</rd:TypeName>
+        </Field>
       </Fields>
       <Query>
         <DataSourceName>PartitioningDemo</DataSourceName>
-        <CommandText>--partitioned objects (join sys.data_spaces to sys.partition_schemes)
-SELECT
+        <CommandText>SELECT
 	OBJECT_NAME(p.object_id) AS ObjectName, 
 	i.name AS IndexName, 
 	p.index_id AS IndexID, 
@@ -91,22 +106,26 @@ SELECT
 	prv_left.value AS LowerBoundaryValue, 
 	prv_right.value AS UpperBoundaryValue, 
 	CASE pf.boundary_value_on_right WHEN 1 THEN 'RIGHT' ELSE 'LEFT' END AS PartitionFunctionRange, 
-	p.rows AS Rows
+	p.[rows] AS [Rows],
+	pst.used_page_count AS UsedPages,
+	pst.used_page_count * 8 AS UsedSpaceKB,
+	pst.reserved_page_count as ReservedPages,
+	pst.reserved_page_count * 8 as ReservedSpaceKB
 FROM
-	sys.partitions AS p INNER JOIN
-	sys.indexes AS i ON i.object_id = p.object_id AND i.index_id = p.index_id INNER JOIN
-	sys.data_spaces AS ds ON ds.data_space_id = i.data_space_id INNER JOIN
-	sys.partition_schemes AS ps ON ps.data_space_id = ds.data_space_id INNER JOIN
-	sys.partition_functions AS pf ON pf.function_id = ps.function_id INNER JOIN
-	sys.destination_data_spaces AS dds2 ON dds2.partition_scheme_id = ps.data_space_id AND dds2.destination_id = p.partition_number INNER JOIN
-	sys.filegroups AS fg ON fg.data_space_id = dds2.data_space_id LEFT OUTER JOIN
-	sys.partition_range_values AS prv_left ON ps.function_id = prv_left.function_id AND prv_left.boundary_id = p.partition_number - 1 LEFT OUTER JOIN
-	sys.partition_range_values AS prv_right ON ps.function_id = prv_right.function_id AND prv_right.boundary_id = p.partition_number
+	sys.partitions AS p 
+	INNER JOIN sys.dm_db_partition_stats AS pst ON p.partition_id = pst.partition_id
+	INNER JOIN sys.indexes AS i ON i.[object_id] = p.[object_id] AND i.index_id = p.index_id
+	INNER JOIN sys.data_spaces AS ds ON ds.data_space_id = i.data_space_id
+	INNER JOIN sys.partition_schemes AS ps ON ps.data_space_id = ds.data_space_id
+	INNER JOIN sys.partition_functions AS pf ON pf.function_id = ps.function_id
+	INNER JOIN sys.destination_data_spaces AS dds2 ON dds2.partition_scheme_id = ps.data_space_id AND dds2.destination_id = p.partition_number
+	INNER JOIN sys.filegroups AS fg ON fg.data_space_id = dds2.data_space_id
+	LEFT OUTER JOIN sys.partition_range_values AS prv_left ON ps.function_id = prv_left.function_id AND prv_left.boundary_id = p.partition_number - 1
+	LEFT OUTER JOIN sys.partition_range_values AS prv_right ON ps.function_id = prv_right.function_id AND prv_right.boundary_id = p.partition_number
 WHERE
 	p.object_id = CASE WHEN @ObjectTypeName IN ('Table', 'View') THEN OBJECT_ID(@ObjectName) ELSE p.object_id END --when a table or view is selected, filter on only the selected object
 	AND OBJECTPROPERTY(p.object_id, 'IsMSShipped') = 0
 UNION ALL
---non-partitioned objects (join sys.data_spaces to sys.filegroups)
 SELECT
 	OBJECT_NAME(p.object_id) AS ObjectName, 
 	i.name AS IndexName,
@@ -117,12 +136,17 @@ SELECT
 	NULL AS LowerBoundaryValue,
 	NULL AS UpperBoundaryValue, 
 	NULL AS PartitionFunctionRange, 
-	p.rows AS Rows
+	p.[rows] AS [Rows],
+	pst.used_page_count AS UsedPages,
+	pst.used_page_count * 8 AS UsedSpaceKB,
+	pst.reserved_page_count as ReservedPages,
+	pst.reserved_page_count * 8 as ReservedSpaceKB
 FROM
-	sys.partitions AS p INNER JOIN
-	sys.indexes AS i ON i.object_id = p.object_id AND i.index_id = p.index_id INNER JOIN
-	sys.data_spaces AS ds ON ds.data_space_id = i.data_space_id INNER JOIN
-	sys.filegroups AS fg ON fg.data_space_id = i.data_space_id
+	sys.partitions AS p 
+	INNER JOIN sys.dm_db_partition_stats AS pst ON p.partition_id = pst.partition_id
+	INNER JOIN sys.indexes AS i ON i.object_id = p.object_id AND i.index_id = p.index_id
+	INNER JOIN sys.data_spaces AS ds ON ds.data_space_id = i.data_space_id
+	INNER JOIN sys.filegroups AS fg ON fg.data_space_id = i.data_space_id
 WHERE
 	p.object_id = CASE WHEN @ObjectTypeName IN ('Table', 'View') THEN OBJECT_ID(@ObjectName) ELSE p.object_id END --when a table or view is selected, filter on only the selected object
 	AND OBJECTPROPERTY(p.object_id, 'IsMSShipped') = 0
@@ -142,7 +166,7 @@ ORDER BY
       </Query>
     </DataSet>
   </DataSets>
-  <Width>15.125in</Width>
+  <Width>22.125in</Width>
   <Body>
     <ReportItems>
       <Textbox Name="textbox1">
@@ -202,7 +226,7 @@ ORDER BY
                             <PaddingTop>2pt</PaddingTop>
                             <PaddingBottom>2pt</PaddingBottom>
                           </Style>
-                          <ZIndex>26</ZIndex>
+                          <ZIndex>38</ZIndex>
                           <CanGrow>true</CanGrow>
                           <Value>=Fields!ObjectName.Value</Value>
                         </Textbox>
@@ -227,7 +251,7 @@ ORDER BY
                             <PaddingTop>2pt</PaddingTop>
                             <PaddingBottom>2pt</PaddingBottom>
                           </Style>
-                          <ZIndex>25</ZIndex>
+                          <ZIndex>37</ZIndex>
                           <CanGrow>true</CanGrow>
                           <Value>
                           </Value>
@@ -254,7 +278,7 @@ ORDER BY
                             <PaddingTop>2pt</PaddingTop>
                             <PaddingBottom>2pt</PaddingBottom>
                           </Style>
-                          <ZIndex>24</ZIndex>
+                          <ZIndex>36</ZIndex>
                           <CanGrow>true</CanGrow>
                           <Value>=Sum(Iif(Fields!IndexID.Value = 0 Or Fields!IndexID.Value = 1,System.Convert.ToInt64(Fields!Rows.Value),System.Convert.ToInt64(0))) 'sum only clustered index or heap rows for summary line</Value>
                         </Textbox>
@@ -279,7 +303,7 @@ ORDER BY
                             <PaddingTop>2pt</PaddingTop>
                             <PaddingBottom>2pt</PaddingBottom>
                           </Style>
-                          <ZIndex>23</ZIndex>
+                          <ZIndex>35</ZIndex>
                           <CanGrow>true</CanGrow>
                           <Value />
                         </Textbox>
@@ -304,7 +328,7 @@ ORDER BY
                             <PaddingTop>2pt</PaddingTop>
                             <PaddingBottom>2pt</PaddingBottom>
                           </Style>
-                          <ZIndex>22</ZIndex>
+                          <ZIndex>34</ZIndex>
                           <CanGrow>true</CanGrow>
                           <Value>
                           </Value>
@@ -330,7 +354,7 @@ ORDER BY
                             <PaddingTop>2pt</PaddingTop>
                             <PaddingBottom>2pt</PaddingBottom>
                           </Style>
-                          <ZIndex>21</ZIndex>
+                          <ZIndex>33</ZIndex>
                           <CanGrow>true</CanGrow>
                           <Value>
                           </Value>
@@ -356,7 +380,7 @@ ORDER BY
                             <PaddingTop>2pt</PaddingTop>
                             <PaddingBottom>2pt</PaddingBottom>
                           </Style>
-                          <ZIndex>20</ZIndex>
+                          <ZIndex>32</ZIndex>
                           <CanGrow>true</CanGrow>
                           <Value>
                           </Value>
@@ -382,7 +406,7 @@ ORDER BY
                             <PaddingTop>2pt</PaddingTop>
                             <PaddingBottom>2pt</PaddingBottom>
                           </Style>
-                          <ZIndex>19</ZIndex>
+                          <ZIndex>31</ZIndex>
                           <CanGrow>true</CanGrow>
                           <Value>
                           </Value>
@@ -408,9 +432,113 @@ ORDER BY
                             <PaddingTop>2pt</PaddingTop>
                             <PaddingBottom>2pt</PaddingBottom>
                           </Style>
-                          <ZIndex>18</ZIndex>
+                          <ZIndex>30</ZIndex>
                           <CanGrow>true</CanGrow>
                           <Value />
+                        </Textbox>
+                      </ReportItems>
+                    </TableCell>
+                    <TableCell>
+                      <ReportItems>
+                        <Textbox Name="textbox120">
+                          <rd:DefaultName>textbox120</rd:DefaultName>
+                          <Style>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <BorderColor>
+                              <Default>Silver</Default>
+                            </BorderColor>
+                            <BorderStyle>
+                              <Default>Solid</Default>
+                            </BorderStyle>
+                            <FontFamily>Tahoma</FontFamily>
+                            <FontWeight>700</FontWeight>
+                            <Format>#,##0</Format>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                          <ZIndex>29</ZIndex>
+                          <CanGrow>true</CanGrow>
+                          <Value>=Sum(Fields!UsedPages.Value)</Value>
+                        </Textbox>
+                      </ReportItems>
+                    </TableCell>
+                    <TableCell>
+                      <ReportItems>
+                        <Textbox Name="textbox121">
+                          <rd:DefaultName>textbox121</rd:DefaultName>
+                          <Style>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <BorderColor>
+                              <Default>Silver</Default>
+                            </BorderColor>
+                            <BorderStyle>
+                              <Default>Solid</Default>
+                            </BorderStyle>
+                            <FontFamily>Tahoma</FontFamily>
+                            <FontWeight>700</FontWeight>
+                            <Format>#,##0</Format>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                          <ZIndex>28</ZIndex>
+                          <CanGrow>true</CanGrow>
+                          <Value>=Sum(Fields!UsedSpaceKB.Value)</Value>
+                        </Textbox>
+                      </ReportItems>
+                    </TableCell>
+                    <TableCell>
+                      <ReportItems>
+                        <Textbox Name="textbox116">
+                          <rd:DefaultName>textbox116</rd:DefaultName>
+                          <Style>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <BorderColor>
+                              <Default>Silver</Default>
+                            </BorderColor>
+                            <BorderStyle>
+                              <Default>Solid</Default>
+                            </BorderStyle>
+                            <FontFamily>Tahoma</FontFamily>
+                            <FontWeight>700</FontWeight>
+                            <Format>#,##0</Format>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                          <ZIndex>27</ZIndex>
+                          <CanGrow>true</CanGrow>
+                          <Value>=Sum(Fields!ReservedPages.Value)</Value>
+                        </Textbox>
+                      </ReportItems>
+                    </TableCell>
+                    <TableCell>
+                      <ReportItems>
+                        <Textbox Name="textbox118">
+                          <rd:DefaultName>textbox118</rd:DefaultName>
+                          <Style>
+                            <BackgroundColor>WhiteSmoke</BackgroundColor>
+                            <BorderColor>
+                              <Default>Silver</Default>
+                            </BorderColor>
+                            <BorderStyle>
+                              <Default>Solid</Default>
+                            </BorderStyle>
+                            <FontFamily>Tahoma</FontFamily>
+                            <FontWeight>700</FontWeight>
+                            <Format>#,##0</Format>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                          <ZIndex>26</ZIndex>
+                          <CanGrow>true</CanGrow>
+                          <Value>=Sum(Fields!ReservedSpaceKB.Value)</Value>
                         </Textbox>
                       </ReportItems>
                     </TableCell>
@@ -459,7 +587,7 @@ ORDER BY
                             <PaddingTop>2pt</PaddingTop>
                             <PaddingBottom>2pt</PaddingBottom>
                           </Style>
-                          <ZIndex>17</ZIndex>
+                          <ZIndex>25</ZIndex>
                           <CanGrow>true</CanGrow>
                           <Value>
                           </Value>
@@ -485,7 +613,7 @@ ORDER BY
                             <PaddingTop>2pt</PaddingTop>
                             <PaddingBottom>2pt</PaddingBottom>
                           </Style>
-                          <ZIndex>16</ZIndex>
+                          <ZIndex>24</ZIndex>
                           <CanGrow>true</CanGrow>
                           <Value>=Fields!IndexName.Value</Value>
                         </Textbox>
@@ -511,7 +639,7 @@ ORDER BY
                             <PaddingTop>2pt</PaddingTop>
                             <PaddingBottom>2pt</PaddingBottom>
                           </Style>
-                          <ZIndex>15</ZIndex>
+                          <ZIndex>23</ZIndex>
                           <CanGrow>true</CanGrow>
                           <Value>=Sum(Fields!Rows.Value)</Value>
                         </Textbox>
@@ -536,7 +664,7 @@ ORDER BY
                             <PaddingTop>2pt</PaddingTop>
                             <PaddingBottom>2pt</PaddingBottom>
                           </Style>
-                          <ZIndex>14</ZIndex>
+                          <ZIndex>22</ZIndex>
                           <CanGrow>true</CanGrow>
                           <Value>=Max(Fields!PartitionNumber.Value)</Value>
                         </Textbox>
@@ -561,7 +689,7 @@ ORDER BY
                             <PaddingTop>2pt</PaddingTop>
                             <PaddingBottom>2pt</PaddingBottom>
                           </Style>
-                          <ZIndex>13</ZIndex>
+                          <ZIndex>21</ZIndex>
                           <CanGrow>true</CanGrow>
                           <Value />
                         </Textbox>
@@ -586,7 +714,7 @@ ORDER BY
                             <PaddingTop>2pt</PaddingTop>
                             <PaddingBottom>2pt</PaddingBottom>
                           </Style>
-                          <ZIndex>12</ZIndex>
+                          <ZIndex>20</ZIndex>
                           <CanGrow>true</CanGrow>
                           <Value>
                           </Value>
@@ -612,7 +740,7 @@ ORDER BY
                             <PaddingTop>2pt</PaddingTop>
                             <PaddingBottom>2pt</PaddingBottom>
                           </Style>
-                          <ZIndex>11</ZIndex>
+                          <ZIndex>19</ZIndex>
                           <CanGrow>true</CanGrow>
                           <Value>=Fields!PartitionFunctionRange.Value
                           </Value>
@@ -638,7 +766,7 @@ ORDER BY
                             <PaddingTop>2pt</PaddingTop>
                             <PaddingBottom>2pt</PaddingBottom>
                           </Style>
-                          <ZIndex>10</ZIndex>
+                          <ZIndex>18</ZIndex>
                           <CanGrow>true</CanGrow>
                           <Value>=Fields!PartitionScheme.Value
                           </Value>
@@ -664,9 +792,113 @@ ORDER BY
                             <PaddingTop>2pt</PaddingTop>
                             <PaddingBottom>2pt</PaddingBottom>
                           </Style>
-                          <ZIndex>9</ZIndex>
+                          <ZIndex>17</ZIndex>
                           <CanGrow>true</CanGrow>
                           <Value>=Iif(Fields!PartitionScheme.Value Is Nothing, Fields!FileGroupName.Value, "") 'include filegroup name on summary line if not partitioned</Value>
+                        </Textbox>
+                      </ReportItems>
+                    </TableCell>
+                    <TableCell>
+                      <ReportItems>
+                        <Textbox Name="textbox127">
+                          <rd:DefaultName>textbox127</rd:DefaultName>
+                          <Style>
+                            <BackgroundColor>Azure</BackgroundColor>
+                            <BorderColor>
+                              <Default>LightGrey</Default>
+                            </BorderColor>
+                            <BorderStyle>
+                              <Default>Solid</Default>
+                            </BorderStyle>
+                            <FontFamily>Tahoma</FontFamily>
+                            <FontWeight>700</FontWeight>
+                            <Format>#,##0</Format>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                          <ZIndex>16</ZIndex>
+                          <CanGrow>true</CanGrow>
+                          <Value>=Sum(Fields!UsedPages.Value)</Value>
+                        </Textbox>
+                      </ReportItems>
+                    </TableCell>
+                    <TableCell>
+                      <ReportItems>
+                        <Textbox Name="textbox128">
+                          <rd:DefaultName>textbox128</rd:DefaultName>
+                          <Style>
+                            <BackgroundColor>Azure</BackgroundColor>
+                            <BorderColor>
+                              <Default>LightGrey</Default>
+                            </BorderColor>
+                            <BorderStyle>
+                              <Default>Solid</Default>
+                            </BorderStyle>
+                            <FontFamily>Tahoma</FontFamily>
+                            <FontWeight>700</FontWeight>
+                            <Format>#,##0</Format>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                          <ZIndex>15</ZIndex>
+                          <CanGrow>true</CanGrow>
+                          <Value>=Sum(Fields!UsedSpaceKB.Value)</Value>
+                        </Textbox>
+                      </ReportItems>
+                    </TableCell>
+                    <TableCell>
+                      <ReportItems>
+                        <Textbox Name="textbox129">
+                          <rd:DefaultName>textbox129</rd:DefaultName>
+                          <Style>
+                            <BackgroundColor>Azure</BackgroundColor>
+                            <BorderColor>
+                              <Default>LightGrey</Default>
+                            </BorderColor>
+                            <BorderStyle>
+                              <Default>Solid</Default>
+                            </BorderStyle>
+                            <FontFamily>Tahoma</FontFamily>
+                            <FontWeight>700</FontWeight>
+                            <Format>#,##0</Format>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                          <ZIndex>14</ZIndex>
+                          <CanGrow>true</CanGrow>
+                          <Value>=Sum(Fields!ReservedPages.Value)</Value>
+                        </Textbox>
+                      </ReportItems>
+                    </TableCell>
+                    <TableCell>
+                      <ReportItems>
+                        <Textbox Name="textbox130">
+                          <rd:DefaultName>textbox130</rd:DefaultName>
+                          <Style>
+                            <BackgroundColor>Azure</BackgroundColor>
+                            <BorderColor>
+                              <Default>LightGrey</Default>
+                            </BorderColor>
+                            <BorderStyle>
+                              <Default>Solid</Default>
+                            </BorderStyle>
+                            <FontFamily>Tahoma</FontFamily>
+                            <FontWeight>700</FontWeight>
+                            <Format>#,##0</Format>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                          <ZIndex>13</ZIndex>
+                          <CanGrow>true</CanGrow>
+                          <Value>=Sum(Fields!ReservedSpaceKB.Value)</Value>
                         </Textbox>
                       </ReportItems>
                     </TableCell>
@@ -703,7 +935,7 @@ ORDER BY
                         <PaddingTop>2pt</PaddingTop>
                         <PaddingBottom>2pt</PaddingBottom>
                       </Style>
-                      <ZIndex>8</ZIndex>
+                      <ZIndex>12</ZIndex>
                       <CanGrow>true</CanGrow>
                       <Value>
                       </Value>
@@ -728,7 +960,7 @@ ORDER BY
                         <PaddingTop>2pt</PaddingTop>
                         <PaddingBottom>2pt</PaddingBottom>
                       </Style>
-                      <ZIndex>7</ZIndex>
+                      <ZIndex>11</ZIndex>
                       <CanGrow>true</CanGrow>
                       <Value>
                       </Value>
@@ -754,7 +986,7 @@ ORDER BY
                         <PaddingTop>2pt</PaddingTop>
                         <PaddingBottom>2pt</PaddingBottom>
                       </Style>
-                      <ZIndex>6</ZIndex>
+                      <ZIndex>10</ZIndex>
                       <CanGrow>true</CanGrow>
                       <Value>=Fields!Rows.Value</Value>
                     </Textbox>
@@ -778,7 +1010,7 @@ ORDER BY
                         <PaddingTop>2pt</PaddingTop>
                         <PaddingBottom>2pt</PaddingBottom>
                       </Style>
-                      <ZIndex>5</ZIndex>
+                      <ZIndex>9</ZIndex>
                       <CanGrow>true</CanGrow>
                       <Value>=Fields!PartitionNumber.Value</Value>
                     </Textbox>
@@ -802,7 +1034,7 @@ ORDER BY
                         <PaddingTop>2pt</PaddingTop>
                         <PaddingBottom>2pt</PaddingBottom>
                       </Style>
-                      <ZIndex>4</ZIndex>
+                      <ZIndex>8</ZIndex>
                       <CanGrow>true</CanGrow>
                       <Value>=Fields!LowerBoundaryValue.Value</Value>
                     </Textbox>
@@ -826,7 +1058,7 @@ ORDER BY
                         <PaddingTop>2pt</PaddingTop>
                         <PaddingBottom>2pt</PaddingBottom>
                       </Style>
-                      <ZIndex>3</ZIndex>
+                      <ZIndex>7</ZIndex>
                       <CanGrow>true</CanGrow>
                       <Value>=Fields!UpperBoundaryValue.Value</Value>
                     </Textbox>
@@ -850,7 +1082,7 @@ ORDER BY
                         <PaddingTop>2pt</PaddingTop>
                         <PaddingBottom>2pt</PaddingBottom>
                       </Style>
-                      <ZIndex>2</ZIndex>
+                      <ZIndex>6</ZIndex>
                       <CanGrow>true</CanGrow>
                       <Value />
                     </Textbox>
@@ -874,7 +1106,7 @@ ORDER BY
                         <PaddingTop>2pt</PaddingTop>
                         <PaddingBottom>2pt</PaddingBottom>
                       </Style>
-                      <ZIndex>1</ZIndex>
+                      <ZIndex>5</ZIndex>
                       <CanGrow>true</CanGrow>
                       <Value />
                     </Textbox>
@@ -898,8 +1130,108 @@ ORDER BY
                         <PaddingTop>2pt</PaddingTop>
                         <PaddingBottom>2pt</PaddingBottom>
                       </Style>
+                      <ZIndex>4</ZIndex>
                       <CanGrow>true</CanGrow>
                       <Value>=Fields!FileGroupName.Value</Value>
+                    </Textbox>
+                  </ReportItems>
+                </TableCell>
+                <TableCell>
+                  <ReportItems>
+                    <Textbox Name="UsedPages">
+                      <rd:DefaultName>UsedPages</rd:DefaultName>
+                      <Style>
+                        <BackgroundColor>=iif(RowNumber("table1_IndexName") MOD 2 = 0, "White", "GhostWhite")</BackgroundColor>
+                        <BorderColor>
+                          <Default>LightGrey</Default>
+                        </BorderColor>
+                        <BorderStyle>
+                          <Default>Solid</Default>
+                        </BorderStyle>
+                        <FontFamily>Tahoma</FontFamily>
+                        <Format>#,##0</Format>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                      <ZIndex>3</ZIndex>
+                      <CanGrow>true</CanGrow>
+                      <Value>=Fields!UsedPages.Value</Value>
+                    </Textbox>
+                  </ReportItems>
+                </TableCell>
+                <TableCell>
+                  <ReportItems>
+                    <Textbox Name="UsedSpaceKB">
+                      <rd:DefaultName>UsedSpaceKB</rd:DefaultName>
+                      <Style>
+                        <BackgroundColor>=iif(RowNumber("table1_IndexName") MOD 2 = 0, "White", "GhostWhite")</BackgroundColor>
+                        <BorderColor>
+                          <Default>LightGrey</Default>
+                        </BorderColor>
+                        <BorderStyle>
+                          <Default>Solid</Default>
+                        </BorderStyle>
+                        <FontFamily>Tahoma</FontFamily>
+                        <Format>#,##0</Format>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                      <ZIndex>2</ZIndex>
+                      <CanGrow>true</CanGrow>
+                      <Value>=Fields!UsedSpaceKB.Value</Value>
+                    </Textbox>
+                  </ReportItems>
+                </TableCell>
+                <TableCell>
+                  <ReportItems>
+                    <Textbox Name="ReservedPages">
+                      <rd:DefaultName>ReservedPages</rd:DefaultName>
+                      <Style>
+                        <BackgroundColor>=iif(RowNumber("table1_IndexName") MOD 2 = 0, "White", "GhostWhite")</BackgroundColor>
+                        <BorderColor>
+                          <Default>LightGrey</Default>
+                        </BorderColor>
+                        <BorderStyle>
+                          <Default>Solid</Default>
+                        </BorderStyle>
+                        <FontFamily>Tahoma</FontFamily>
+                        <Format>#,##0</Format>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                      <ZIndex>1</ZIndex>
+                      <CanGrow>true</CanGrow>
+                      <Value>=Fields!ReservedPages.Value</Value>
+                    </Textbox>
+                  </ReportItems>
+                </TableCell>
+                <TableCell>
+                  <ReportItems>
+                    <Textbox Name="ReservedSpaceKB">
+                      <rd:DefaultName>ReservedSpaceKB</rd:DefaultName>
+                      <Style>
+                        <BackgroundColor>=iif(RowNumber("table1_IndexName") MOD 2 = 0, "White", "GhostWhite")</BackgroundColor>
+                        <BorderColor>
+                          <Default>LightGrey</Default>
+                        </BorderColor>
+                        <BorderStyle>
+                          <Default>Solid</Default>
+                        </BorderStyle>
+                        <FontFamily>Tahoma</FontFamily>
+                        <Format>#,##0</Format>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                      <CanGrow>true</CanGrow>
+                      <Value>=Fields!ReservedSpaceKB.Value</Value>
                     </Textbox>
                   </ReportItems>
                 </TableCell>
@@ -932,7 +1264,7 @@ ORDER BY
                         <PaddingTop>2pt</PaddingTop>
                         <PaddingBottom>2pt</PaddingBottom>
                       </Style>
-                      <ZIndex>35</ZIndex>
+                      <ZIndex>51</ZIndex>
                       <CanGrow>true</CanGrow>
                       <Value>Object Name</Value>
                     </Textbox>
@@ -958,7 +1290,7 @@ ORDER BY
                         <PaddingTop>2pt</PaddingTop>
                         <PaddingBottom>2pt</PaddingBottom>
                       </Style>
-                      <ZIndex>34</ZIndex>
+                      <ZIndex>50</ZIndex>
                       <CanGrow>true</CanGrow>
                       <Value>Index Name</Value>
                     </Textbox>
@@ -985,7 +1317,7 @@ ORDER BY
                         <PaddingTop>2pt</PaddingTop>
                         <PaddingBottom>2pt</PaddingBottom>
                       </Style>
-                      <ZIndex>33</ZIndex>
+                      <ZIndex>49</ZIndex>
                       <CanGrow>true</CanGrow>
                       <Value>Rows</Value>
                     </Textbox>
@@ -1012,7 +1344,7 @@ ORDER BY
                         <PaddingTop>2pt</PaddingTop>
                         <PaddingBottom>2pt</PaddingBottom>
                       </Style>
-                      <ZIndex>32</ZIndex>
+                      <ZIndex>48</ZIndex>
                       <CanGrow>true</CanGrow>
                       <Value>Partition Number</Value>
                     </Textbox>
@@ -1038,7 +1370,7 @@ ORDER BY
                         <PaddingTop>2pt</PaddingTop>
                         <PaddingBottom>2pt</PaddingBottom>
                       </Style>
-                      <ZIndex>31</ZIndex>
+                      <ZIndex>47</ZIndex>
                       <CanGrow>true</CanGrow>
                       <Value>Lower Boundary </Value>
                     </Textbox>
@@ -1064,7 +1396,7 @@ ORDER BY
                         <PaddingTop>2pt</PaddingTop>
                         <PaddingBottom>2pt</PaddingBottom>
                       </Style>
-                      <ZIndex>30</ZIndex>
+                      <ZIndex>46</ZIndex>
                       <CanGrow>true</CanGrow>
                       <Value>Upper Boundary </Value>
                     </Textbox>
@@ -1090,7 +1422,7 @@ ORDER BY
                         <PaddingTop>2pt</PaddingTop>
                         <PaddingBottom>2pt</PaddingBottom>
                       </Style>
-                      <ZIndex>29</ZIndex>
+                      <ZIndex>45</ZIndex>
                       <CanGrow>true</CanGrow>
                       <Value>Function Range</Value>
                     </Textbox>
@@ -1116,7 +1448,7 @@ ORDER BY
                         <PaddingTop>2pt</PaddingTop>
                         <PaddingBottom>2pt</PaddingBottom>
                       </Style>
-                      <ZIndex>28</ZIndex>
+                      <ZIndex>44</ZIndex>
                       <CanGrow>true</CanGrow>
                       <Value>Partition Scheme</Value>
                     </Textbox>
@@ -1142,9 +1474,113 @@ ORDER BY
                         <PaddingTop>2pt</PaddingTop>
                         <PaddingBottom>2pt</PaddingBottom>
                       </Style>
-                      <ZIndex>27</ZIndex>
+                      <ZIndex>43</ZIndex>
                       <CanGrow>true</CanGrow>
                       <Value>File Group Name</Value>
+                    </Textbox>
+                  </ReportItems>
+                </TableCell>
+                <TableCell>
+                  <ReportItems>
+                    <Textbox Name="textbox111">
+                      <rd:DefaultName>textbox111</rd:DefaultName>
+                      <Style>
+                        <BackgroundColor>Gainsboro</BackgroundColor>
+                        <BorderColor>
+                          <Default>DimGray</Default>
+                        </BorderColor>
+                        <BorderStyle>
+                          <Default>Solid</Default>
+                        </BorderStyle>
+                        <FontFamily>Tahoma</FontFamily>
+                        <FontSize>11pt</FontSize>
+                        <FontWeight>700</FontWeight>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                      <ZIndex>42</ZIndex>
+                      <CanGrow>true</CanGrow>
+                      <Value>Used Pages</Value>
+                    </Textbox>
+                  </ReportItems>
+                </TableCell>
+                <TableCell>
+                  <ReportItems>
+                    <Textbox Name="textbox112">
+                      <rd:DefaultName>textbox112</rd:DefaultName>
+                      <Style>
+                        <BackgroundColor>Gainsboro</BackgroundColor>
+                        <BorderColor>
+                          <Default>DimGray</Default>
+                        </BorderColor>
+                        <BorderStyle>
+                          <Default>Solid</Default>
+                        </BorderStyle>
+                        <FontFamily>Tahoma</FontFamily>
+                        <FontSize>11pt</FontSize>
+                        <FontWeight>700</FontWeight>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                      <ZIndex>41</ZIndex>
+                      <CanGrow>true</CanGrow>
+                      <Value>Used Space KB</Value>
+                    </Textbox>
+                  </ReportItems>
+                </TableCell>
+                <TableCell>
+                  <ReportItems>
+                    <Textbox Name="textbox107">
+                      <rd:DefaultName>textbox107</rd:DefaultName>
+                      <Style>
+                        <BackgroundColor>Gainsboro</BackgroundColor>
+                        <BorderColor>
+                          <Default>DimGray</Default>
+                        </BorderColor>
+                        <BorderStyle>
+                          <Default>Solid</Default>
+                        </BorderStyle>
+                        <FontFamily>Tahoma</FontFamily>
+                        <FontSize>11pt</FontSize>
+                        <FontWeight>700</FontWeight>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                      <ZIndex>40</ZIndex>
+                      <CanGrow>true</CanGrow>
+                      <Value>Reserved Pages</Value>
+                    </Textbox>
+                  </ReportItems>
+                </TableCell>
+                <TableCell>
+                  <ReportItems>
+                    <Textbox Name="textbox109">
+                      <rd:DefaultName>textbox109</rd:DefaultName>
+                      <Style>
+                        <BackgroundColor>Gainsboro</BackgroundColor>
+                        <BorderColor>
+                          <Default>DimGray</Default>
+                        </BorderColor>
+                        <BorderStyle>
+                          <Default>Solid</Default>
+                        </BorderStyle>
+                        <FontFamily>Tahoma</FontFamily>
+                        <FontSize>11pt</FontSize>
+                        <FontWeight>700</FontWeight>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                      <ZIndex>39</ZIndex>
+                      <CanGrow>true</CanGrow>
+                      <Value>Reserved Space KB</Value>
                     </Textbox>
                   </ReportItems>
                 </TableCell>
@@ -1179,6 +1615,18 @@ ORDER BY
           </TableColumn>
           <TableColumn>
             <Width>2.125in</Width>
+          </TableColumn>
+          <TableColumn>
+            <Width>1.75in</Width>
+          </TableColumn>
+          <TableColumn>
+            <Width>1.75in</Width>
+          </TableColumn>
+          <TableColumn>
+            <Width>1.75in</Width>
+          </TableColumn>
+          <TableColumn>
+            <Width>1.75in</Width>
           </TableColumn>
           <TableColumn>
             <Width>1.75in</Width>

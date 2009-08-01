@@ -4,12 +4,16 @@
   <DataSources />
   <Reports>
     <ProjectItem>
+      <Name>Partition Details.rdl</Name>
+      <FullPath>Partition Details.rdl</FullPath>
+    </ProjectItem>
+    <ProjectItem>
       <Name>SSMS Node Parameters.rdl</Name>
       <FullPath>SSMS Node Parameters.rdl</FullPath>
     </ProjectItem>
     <ProjectItem>
-      <Name>Partition Details.rdl</Name>
-      <FullPath>Partition Details.rdl</FullPath>
+      <Name>Partition Details With Space Information.rdl</Name>
+      <FullPath>Partition Details With Space Information.rdl</FullPath>
     </ProjectItem>
   </Reports>
   <Configurations>
