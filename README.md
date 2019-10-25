@@ -5,7 +5,7 @@ The basic Partition Details report lists tables and indexed views in the context
 - Object name 
 - Index name 
 - Rows (object and partition level) 
-- Partition Num ber 
+- Partition Number 
 - Partition Lower Boundary (partitioned objects only) 
 - Partition Upper Boundary (partitioned objects only) ,
 - Partition Function Range (LEFT or RIGHT) (partitioned objects only) 
